@@ -1,0 +1,180 @@
+import multiprocessing
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+import os
+
+# Encryption function
+def encrypt_data(data, key):
+    cipher = AES.new(key, AES.MODE_CBC)
+    ct_bytes = cipher.encrypt(pad(data.encode(), AES.block_size))
+    iv = cipher.iv
+    return iv, ct_bytes
+
+# Parallel encryption function
+def parallel_encrypt_data(data, key, num_processes=2):
+    data_chunks = [data[i::num_processes] for i in range(num_processes)]
+    with multiprocessing.Pool(processes=num_processes) as pool:
+        results = pool.starmap(encrypt_data, [(chunk, key) for chunk in data_chunks])
+    return results
+
+if __name__ == "__main__":
+    # User data to encrypt
+    user_data = "This is the data to encrypt."
+
+    # Generate a random AES key (16 bytes for AES-128)
+    key = os.urandom(16)
+
+    # Encrypt data in parallel
+    encrypted_data = parallel_encrypt_data(user_data, key)
+
+    print("Encrypted data:", encrypted_data)
+
+
+
+#########################   Authendication
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+import hashlib
+
+# Generate a private/public key pair
+private_key = serialization.load_pem_private_key(
+    b"PRIVATE_KEY_HERE",
+    password=None,
+    backend=default_backend()
+)
+public_key = private_key.public_key()
+
+# Sign data with the private key
+def sign_data(data):
+    signature = private_key.sign(
+        data,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    return signature
+
+# Verify the signature with the public key
+def verify_signature(data, signature):
+    try:
+        public_key.verify(
+            signature,
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return True
+    except:
+        return False
+
+# Authenticate biometric data (dummy example)
+def authenticate_biometric(input_biometric, stored_biometric):
+    input_hash = hashlib.sha256(input_biometric.encode()).hexdigest()
+    stored_hash = hashlib.sha256(stored_biometric.encode()).hexdigest()
+    return input_hash == stored_hash
+
+if __name__ == "__main__":
+    # Example user data and biometric
+    user_data = b"Encrypted data"
+    signature = sign_data(user_data)
+    input_biometric = "User's biometric data"
+    stored_biometric = "User's stored biometric data"
+
+    # Verify signature
+    is_signature_valid = verify_signature(user_data, signature)
+    print("Signature is valid:", is_signature_valid)
+
+    # Authenticate biometric
+    is_biometric_authenticated = authenticate_biometric(input_biometric, stored_biometric)
+    print("Biometric is authenticated:", is_biometric_authenticated)
+
+
+
+################################# for digit and text recognition
+
+import tensorflow as tf
+from tensorflow.keras import datasets, layers, models
+import matplotlib.pyplot as plt
+
+# Load and preprocess the MNIST dataset
+(train_images, train_labels), (test_images, test_labels) = datasets.mnist.load_data()
+train_images, test_images = train_images / 255.0, test_images / 255.0
+
+# Add a channel dimension
+train_images = train_images.reshape((60000, 28, 28, 1))
+test_images = test_images.reshape((10000, 28, 28, 1))
+
+# Create a CNN model
+model = models.Sequential()
+model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.Flatten())
+model.add(layers.Dense(64, activation='relu'))
+model.add(layers.Dense(10, activation='softmax'))
+
+# Compile and train the model
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+model.fit(train_images, train_labels, epochs=5, batch_size=64)
+
+# Evaluate the model on test data
+test_loss, test_acc = model.evaluate(test_images, test_labels)
+print(f"Test accuracy: {test_acc}")
+
+# Save the model
+model.save("digit_recognition_model.h5")
+
+
+
+
+import pytesseract
+from PIL import Image
+
+# Path to the image file
+image_path = 'handwritten_image.png'
+
+# Open the image file using PIL (Python Imaging Library)
+img = Image.open(image_path)
+
+# Use pytesseract to recognize text from the image
+text = pytesseract.image_to_string(img)
+
+# Print the recognized text
+print("Recognized text:")
+print(text)
+
+
+#################### saving classifier model weights
+from sklearn import datasets
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+import joblib
+
+# Load the Iris dataset
+iris = datasets.load_iris()
+X = iris.data
+y = iris.target
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train a Random Forest classifier
+clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf.fit(X_train, y_train)
+
+# Save the trained model to a file
+joblib.dump(clf, 'random_forest_model.joblib')
+
+print("Model saved successfully.")
